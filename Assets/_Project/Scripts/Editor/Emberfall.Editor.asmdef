@@ -1,0 +1,1 @@
+{"name": "Emberfall.Editor", "rootNamespace": "Emberfall.Editor", "references": ["Emberfall.Runtime"], "includePlatforms": ["Editor"], "excludePlatforms": [], "allowUnsafeCode": false, "overrideReferences": false, "precompiledReferences": [], "autoReferenced": true, "defineConstraints": [], "versionDefines": [], "noEngineReferences": false}
