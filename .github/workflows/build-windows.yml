@@ -1,0 +1,51 @@
+name: Build Windows (Steam candidate)
+
+# Manual only: builds a Windows x64 player with GameCI.
+# Uses your GitHub Actions minutes and needs the same Unity secrets as tests.yml.
+# The artifact is a folder you can run locally or hand to SteamPipe later.
+on:
+  workflow_dispatch:
+    inputs:
+      steamBuild:
+        description: "Define STEAM_BUILD (needs the Steamworks.NET package added first)"
+        type: boolean
+        default: false
+
+jobs:
+  buildWindows:
+    name: Windows x64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Windows-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-
+
+      - name: Build
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          targetPlatform: StandaloneWindows64
+          buildName: Emberfall
+          buildsPath: build
+          # The graybox bootstrap scene must exist at this path before the first
+          # real build (README step 6). Until then this workflow is the template.
+          buildMethod: ""
+          customParameters: ${{ inputs.steamBuild && '-scriptingDefineSymbols STEAM_BUILD' || '' }}
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Emberfall-Windows64
+          path: build/StandaloneWindows64

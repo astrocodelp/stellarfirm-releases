@@ -3,7 +3,7 @@
 Honest scope: a complete, great RPG is 18–36 months of team work. This plan gets to a **paid-quality vertical slice fast**, then scales content. Dates are relative to kickoff (K).
 
 ## Phase 0 — First Ember (this repo, done in v0.1)
-Core systems + tests + graybox playable loop + CI. CEO: create the Unity project, open once, commit metas, add Unity CI secrets, play the graybox.
+Core systems + tests + graybox playable loop + CI. Logic proven headlessly: 62/62 EditMode tests pass (`tools/headless/run.sh`). CI runs EditMode + PlayMode (`tests.yml`); a manual Windows build workflow (`build-windows.yml`) is the SteamPipe candidate template. CEO: create the Unity project, open once, commit metas, add Unity CI secrets, play the graybox.
 
 ## Phase 1 — Vertical slice (K + 4–8 weeks)
 One real biome (Sunken Archive): room tileset, 3 enemy types with final telegraphs, first shard boss (1 phase), Bastion hub corner (Smith + Emberkeeper), ember economy live, real save/load UI, options menu (accessibility set), Input System asset with rebinding UI. **Gate: 10 external playtests; combat clarity score ≥ 4/5.**
