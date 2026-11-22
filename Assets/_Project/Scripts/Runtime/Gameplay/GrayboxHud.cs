@@ -27,6 +27,7 @@ namespace Emberfall.Gameplay
         private int _inventorySelection;
         private float _uiScale = -1f;
         private Texture2D _panelTex;
+        private Font _runtimeFont;
         private string _toast;
         private float _toastTimer;
 
@@ -151,6 +152,10 @@ namespace Emberfall.Gameplay
             float scale = _session != null && _session.Settings != null ? Mathf.Clamp(_session.Settings.TextScale, 1f, 2f) : 1f;
             if (_label != null && Mathf.Approximately(_uiScale, scale)) return;
             _uiScale = scale;
+            // Unity 6 removed the built-in Arial: IMGUI skin then has no font and
+            // all text renders blank. Load the engine font once and set it below.
+            if (_runtimeFont == null)
+                _runtimeFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             _label = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(14 * scale), wordWrap = true };
             _label.normal.textColor = Color.white;
             _big = new GUIStyle(_label) { fontSize = Mathf.RoundToInt(22 * scale), fontStyle = FontStyle.Bold };
@@ -162,6 +167,12 @@ namespace Emberfall.Gameplay
             if (_panelTex != null) Destroy(_panelTex);
             _panelTex = MakeTex(new Color(0.07f, 0.07f, 0.1f, 0.92f));
             _panel.normal.background = _panelTex;
+            if (_runtimeFont != null)
+            {
+                _label.font = _runtimeFont;
+                _big.font = _runtimeFont;
+                _button.font = _runtimeFont;
+            }
         }
 
         private static Texture2D MakeTex(Color c)

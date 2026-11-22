@@ -138,6 +138,13 @@ namespace Emberfall.Gameplay
             ring.transform.SetParent(transform, false);
             ring.transform.localPosition = new Vector3(0f, -0.45f, 0f);
             ring.transform.localScale = new Vector3(Definition.AttackRange * 2f, 0.02f, Definition.AttackRange * 2f);
+            var ringRenderer = ring.GetComponent<Renderer>();
+            var ringShader = Shader.Find("Unlit/Color");
+            if (ringRenderer != null && ringShader != null)
+            {
+                ringRenderer.material = new Material(ringShader);
+                ringRenderer.material.color = new Color(0.9f, 0.35f, 0.1f); // warning orange; "!" text carries the meaning too
+            }
             var markerGo = new GameObject("TelegraphMarker");
             markerGo.transform.SetParent(transform, false);
             markerGo.transform.localPosition = new Vector3(0f, 1.6f, 0f);
@@ -148,6 +155,11 @@ namespace Emberfall.Gameplay
             _marker.anchor = TextAnchor.MiddleCenter;
             _marker.alignment = TextAlignment.Center;
             _marker.color = Color.white;
+            // Unity 6: built-in Arial is gone; TextMesh needs an explicit font.
+            _marker.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            var markerRenderer = markerGo.GetComponent<MeshRenderer>();
+            if (markerRenderer != null && _marker.font != null)
+                markerRenderer.sharedMaterial = _marker.font.material;
             _telegraphRing = ring.transform;
             HideTelegraph();
         }

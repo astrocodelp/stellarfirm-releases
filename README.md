@@ -18,12 +18,11 @@ You are the last Emberbearer, walking a kingdom where the sun went out a generat
 ## Open it (CEO steps, in order)
 
 1. In Unity Hub, create a **Unity 6 LTS (6000.0.x), Universal 3D** project named `Emberfall` (company name: your studio name — decide now, save paths depend on it).
-2. Copy this repository's `Assets/`, `ProjectSettings/` additions and docs over the fresh project (or clone this repo and open it — Unity will generate `ProjectSettings` on first open; set serialization to Force Text and Visible Meta Files in Editor settings).
-3. Package Manager: install **Input System**, **TextMeshPro** (import TMP Essentials when prompted), **Cinemachine** (optional). Set Active Input Handling to **Both** (Player Settings → Other Settings). The graybox uses the legacy Input API so it is playable immediately; the shipping rebinding UI moves to the Input System asset.
-4. Open the project once, let it import, and **commit the generated `.meta` files**.
-5. Menu **Emberfall → Create Starter Content** — generates all starter ScriptableObjects (weapons, affixes, enemies, skills, quests, database, loot tables).
-6. Create a scene `Assets/_Project/Scenes/Game.unity`, add an empty GameObject `Bootstrap`, add the **GrayboxBootstrap** component, drag the generated `ItemDatabase` into its Database field (and optionally the `Emberfall` input asset later). Press **Play**.
-7. Add the scene under **File → Build Profiles**.
+2. Clone this repo and open it directly in Unity Hub ("Add project from disk"). `Assets/Scenes/Main.unity`, `ProjectSettings/` and all `.meta` files are already committed — Unity imports and you are ready.
+3. Nothing to install: `Packages/manifest.json` pulls Input System, URP and the test framework, and Active Input Handling is already set to **Both** in the committed Player Settings. (TextMeshPro/Cinemachine come later with real UI/cameras.)
+4. Open `Assets/Scenes/Main.unity` and press **Play** — the `GrayboxBootstrap` on the `Emberfall` object builds the arena, player, waves, HUD and saves from code. That's it.
+5. Optional, for designers: menu **Emberfall → Create Starter Content** generates editable ScriptableObjects (weapons, armour, enemies, skills, quests); drag the generated `ItemDatabase` into the bootstrap's Database field to override the code defaults. Menu **Emberfall → Create Playable Scene** regenerates `Main.unity` if you ever delete it.
+6. **File → Build Profiles → Windows → Build** produces `Emberfall.exe`, which boots straight into the game (scene already registered).
 
 ## Controls (graybox defaults; the Gamepad column is the planned Input System mapping)
 

@@ -303,6 +303,13 @@ namespace Emberfall.Gameplay
             arc.transform.SetParent(transform, false);
             arc.transform.localPosition = new Vector3(0f, -0.4f, 1.1f);
             arc.transform.localScale = new Vector3(2.2f, 0.02f, 2.2f);
+            var arcRenderer = arc.GetComponent<Renderer>();
+            var arcShader = Shader.Find("Unlit/Color");
+            if (arcRenderer != null && arcShader != null)
+            {
+                arcRenderer.material = new Material(arcShader);
+                arcRenderer.material.color = new Color(1f, 0.8f, 0.3f, 0.6f);
+            }
             arc.gameObject.SetActive(false);
             _attackArc = arc.transform;
         }

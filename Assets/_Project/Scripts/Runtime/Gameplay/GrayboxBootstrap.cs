@@ -186,7 +186,12 @@ namespace Emberfall.Gameplay
             var renderer = go.GetComponent<Renderer>();
             if (renderer == null) return;
             // new Material per object at spawn time only (never per frame).
-            renderer.material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+            // Unlit first: it is always available in a built player and needs no
+            // scene light (Standard in an empty built scene renders black).
+            var shader = Shader.Find("Unlit/Color")
+                ?? Shader.Find("Universal Render Pipeline/Lit")
+                ?? Shader.Find("Standard");
+            if (shader != null) renderer.material = new Material(shader);
             renderer.material.color = color;
         }
     }

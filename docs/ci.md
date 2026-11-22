@@ -18,4 +18,8 @@ Optional but recommended locally:
 - `git lfs install` once on every machine that clones the repo (big art is stored with LFS).
 - Unity Smart Merge as the git merger for `.unity/.prefab/.asset/.meta` (Unity's `UnityYAMLMerge` tool; Unity's docs explain the setup).
 
-After the first Editor open, commit the generated `.meta` files — CI fails a dirty checkout otherwise.
+All `.meta` files are committed (deterministic GUIDs), so CI checkouts stay clean.
+
+## Windows build
+
+`.github/workflows/build-windows.yml` (manual: Actions → Build Windows → Run workflow) calls `Emberfall.Editor.BuildScript.BuildWindows`, which creates `Assets/Scenes/Main.unity` from code if missing, registers it as the boot scene and builds `Emberfall.exe` (Windows x64). The `Emberfall-Windows64` artifact on the run page is the playable game — unzip and run the exe; it boots straight into the graybox. Same three Unity secrets as tests. Both workflows fail fast with a named error if a secret is missing.
