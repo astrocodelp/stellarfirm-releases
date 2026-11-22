@@ -79,7 +79,8 @@ namespace Emberfall.Tests.PlayMode
             enemies[0].Health.ApplyDamage(99999);
             yield return null;
             Assert.AreEqual(1, _session.Kills);
-            Assert.Greater(_session.Xp + (_session.Level - 1) * 1000, xpBefore, "xp gained (or levelled)");
+            // First husk kill grants 20 XP; the level-1 curve needs 75, so no level-up here.
+            Assert.Greater(_session.Xp, xpBefore, "xp gained");
             Assert.GreaterOrEqual(_session.Ember.Current, emberBefore - 1f, "ember gained minus drain");
         }
 
