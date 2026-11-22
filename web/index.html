@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Emberfall — playable web graybox</title>
+<style>
+:root{--bg:#0b0b10;--panel:#15151d;--line:#2c2c3a;--ink:#e8e6df;--dim:#a9a6b3;--ember:#ffb454;--hp:#e05d5d;--st:#7fc97f;--fo:#6fa8dc;--focus:#ffd166}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+header{padding:.6rem 1rem;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:.5rem;align-items:baseline}
+h1{font-size:1.15rem;margin:0;color:var(--ember)}
+header p{margin:0;color:var(--dim);font-size:.85rem}
+main{max-width:1000px;margin:0 auto;padding:.75rem;display:grid;gap:.75rem}
+#hud{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem}
+.stat b{display:block;font-size:.8rem;letter-spacing:.04em}
+.bar{height:10px;background:#000;border-radius:5px;overflow:hidden;margin:.25rem 0}
+.bar span{display:block;height:100%}
+.stat small{color:var(--dim)}
+#stage{position:relative}
+canvas{width:100%;display:block;background:#0e0e15;border:1px solid var(--line);border-radius:8px;touch-action:none}
+canvas:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+#overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,5,10,.82);border-radius:8px;text-align:center;padding:1rem}
+#overlay.on{display:flex}
+#overlay .card{max-width:34rem}
+#overlay h2{color:var(--ember);margin:.2rem 0}
+button{font:inherit;background:#232336;color:var(--ink);border:1px solid #4a4a68;border-radius:8px;padding:.45rem .8rem;cursor:pointer}
+button:hover{background:#2e2e48}
+button[disabled]{opacity:.45;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:.5rem}
+#touch{display:none;gap:.4rem;flex-wrap:wrap}
+@media (pointer:coarse){#touch{display:flex}}
+#panels{display:grid;gap:.75rem;grid-template-columns:1fr}
+@media(min-width:760px){#panels{grid-template-columns:1.2fr 1fr}}
+section.box{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem}
+section.box h2{font-size:.95rem;margin:.1rem 0 .5rem;color:var(--ember)}
+#log{list-style:none;margin:0;padding:0;font-size:.85rem;max-height:11rem;overflow:auto}
+#log li{padding:.15rem 0;border-bottom:1px dashed #22222e}
+#log li:first-child{color:#fff}
+.tabs{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem}
+.tabs button[aria-selected="true"]{background:#3a3a5c;border-color:var(--ember)}
+.item{display:flex;justify-content:space-between;gap:.5rem;align-items:center;padding:.3rem 0;border-bottom:1px dashed #22222e;font-size:.88rem}
+.rar0{color:#cfcfcf}.rar1{color:#8fd48f}.rar2{color:#7fb2ff}.rar3{color:#c99aff}.rar4{color:#ffc46b}
+.attr{display:flex;justify-content:space-between;align-items:center;padding:.2rem 0}
+kbd{background:#000;border:1px solid #444;border-radius:4px;padding:0 .35rem;font-size:.8rem}
+.help{font-size:.85rem;color:var(--dim)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+footer{padding:.5rem 1rem;color:var(--dim);font-size:.8rem;border-top:1px solid var(--line)}
+@media (prefers-reduced-motion:reduce){.bar span{transition:none}}
+</style>
+</head>
+<body>
+<header>
+<h1>Emberfall: Chronicle of the Hollow Crown</h1>
+<p>Playable web graybox — the exact v0.1 combat rules from the Unity core (62/62 tests green).</p>
+</header>
+<main>
+<div id="hud" aria-label="Player status">
+<div class="stat"><b>HEALTH</b><div class="bar"><span id="bhp" style="background:var(--hp)"></span></div><small id="thp"></small></div>
+<div class="stat"><b>STAMINA</b><div class="bar"><span id="bst" style="background:var(--st)"></span></div><small id="tst"></small></div>
+<div class="stat"><b>FOCUS</b><div class="bar"><span id="bfo" style="background:var(--fo)"></span></div><small id="tfo"></small></div>
+<div class="stat"><b>EMBER (light)</b><div class="bar"><span id="bem" style="background:var(--ember)"></span></div><small id="tem"></small></div>
+<div class="stat"><b>LEVEL <span id="tlv"></span></b><div class="bar"><span id="bxp" style="background:#b48be0"></span></div><small id="txp"></small></div>
+</div>
+
+<div id="stage">
+<canvas id="game" width="960" height="560" tabindex="0" aria-label="Emberfall arena. Top-down combat. Keyboard: WASD or arrows move, J light attack, K heavy, Space dodge, L hold to block or time a parry, 1 2 3 skills, E interact, P pause. A text log below narrates everything that happens."></canvas>
+<div id="overlay" role="dialog" aria-modal="false" aria-labelledby="ovTitle">
+<div class="card">
+<h2 id="ovTitle">Paused</h2>
+<p id="ovText"></p>
+<div class="row" style="justify-content:center" id="ovButtons"></div>
+</div>
+</div>
+</div>
+
+<div class="row" aria-label="Game actions">
+<button id="btnPause">Pause (P)</button>
+<button id="btnSave">Save</button>
+<button id="btnLoad">Load</button>
+<button id="btnHelp">How to play</button>
+</div>
+<div id="touch" aria-label="Touch combat buttons">
+<button data-act="light">Light</button>
+<button data-act="heavy">Heavy</button>
+<button data-act="dodge">Dodge</button>
+<button data-act="block" aria-pressed="false">Block</button>
+<button data-act="s1">Skill 1</button>
+<button data-act="s2">Skill 2</button>
+<button data-act="s3">Skill 3</button>
+<button data-act="interact">Interact</button>
+</div>
+<p class="help" id="roomInfo"></p>
+
+<div id="panels">
+<section class="box">
+<h2>Chronicle (what is happening)</h2>
+<ol id="log" aria-live="polite" aria-relevant="additions"></ol>
+</section>
+<section class="box">
+<div class="tabs" role="tablist" aria-label="Character panels">
+<button role="tab" id="tabQ" aria-selected="true" aria-controls="paneQ">Quests</button>
+<button role="tab" id="tabI" aria-selected="false" aria-controls="paneI">Inventory</button>
+<button role="tab" id="tabA" aria-selected="false" aria-controls="paneA">Attributes</button>
+</div>
+<div id="paneQ" role="tabpanel" aria-labelledby="tabQ"></div>
+<div id="paneI" role="tabpanel" aria-labelledby="tabI" hidden></div>
+<div id="paneA" role="tabpanel" aria-labelledby="tabA" hidden></div>
+</section>
+</div>
+</main>
+<footer>Web graybox of the Unity project. Same math: stamina 10/35/20, parry 0.18 s, combo ×1.5, ember drains 1/s, death drops half. The Steam build is the Unity project in the zip.</footer>
+
+<script>
+"use strict";
+/* ===== Deterministic RNG (mulberry32) ===== */
+function RNG(seed){let s=seed>>>0;return{next(){s|=0;s=(s+0x6D2B79F5)|0;let t=Math.imul(s^(s>>>15),1|s);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;},int(n){return Math.floor(this.next()*n);}};}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+
+/* ===== Ported core rules (Assets/_Project/Scripts/Runtime/Core) ===== */
+const RULES={LightCost:10,HeavyCost:35,DodgeCost:20,IFrames:.25,ComboWindow:.55,ParryWindow:.18,HeavyWindup:.8,CritMult:1.5,
+DrainPerSec:1,KillEmber:5,ShrineEmber:25,BossEmber:50,LowFrac:.25,LowAggro:1.2};
+const DS={MaxLevel:50,PointsPerLevel:3,
+maxHealth:(a,l)=>80+12*a.vig+2*l,maxFocus:a=>30+8*a.foc,maxStamina:a=>60+4*a.vig+2*a.will,maxEmber:a=>100+10*a.will,
+crit:a=>Math.min(.5,.05+.005*a.luck),stamRegen:a=>12+.4*a.will,
+scale:{S:.08,A:.06,B:.05,C:.04,D:.02,E:.01},
+weaponPower:(base,sl,dl,a)=>base*(1+(DS.scale[sl]||0)*a.str+(DS.scale[dl]||0)*a.dex)};
+const xpToNext=l=>50*l+25*l*l;
+function resolveDamage(base,combo,variance,crit,armour,res){
+let d=base*combo*(1+clamp(variance,-.1,.1));if(crit)d*=RULES.CritMult;
+d*=100/(100+Math.max(0,armour));d*=1-clamp(res||0,0,.9);
+return Math.max(1,Math.round(d));}
+const depthScale=f=>1+.12*Math.max(0,f);
+const RARITIES=["Common","Uncommon","Rare","Epic","Legendary"];
+function rollRarity(rng,luckBonus){const s=clamp(luckBonus,0,1);
+const w=[55-30*s,25+10*s,12+10*s,6+7*s,2+3*s];let r=rng.next()*100;
+for(let i=0;i<5;i++){if(r<w[i])return i;r-=w[i];}return 4;}
+const AFFIXES=[["Armour",2,8],["Damage %",.04,.15],["Crit %",.02,.06],["Max HP",8,30],["Focus cost -%",.04,.12]];
+
+/* ===== Content (StarterContent.cs, exact ids & numbers) ===== */
+const WEAPONS=[
+{id:"wpn_ember_blade",name:"Ember Blade",dmg:12,str:"C",dex:"D",speed:1,reach:1.6},
+{id:"wpn_hollow_pike",name:"Hollow Pike",dmg:16,str:"B",dex:"E",speed:.8,reach:2.1},
+{id:"wpn_cinder_daggers",name:"Cinder Daggers",dmg:8,str:"E",dex:"B",speed:1.4,reach:1.25}];
+const ARMOUR=[
+{id:"arm_ashen_helm",name:"Ashen Helm",slot:"Helm",arm:8},
+{id:"arm_emberbearer_mail",name:"Emberbearer Mail",slot:"Chest",arm:18},
+{id:"arm_cinder_gloves",name:"Cinder Gloves",slot:"Gloves",arm:5},
+{id:"arm_wanderer_boots",name:"Wanderer Boots",slot:"Boots",arm:6},
+{id:"arm_signet_of_will",name:"Signet of Will",slot:"Ring",arm:0},
+{id:"arm_hollow_amulet",name:"Hollow Amulet",slot:"Amulet",arm:0}];
+const ENEMIES={
+enm_husk:{name:"Hollow Husk",hp:40,dmg:8,arm:5,spd:2.6,tel:.7,xp:20,r:.42,elite:false},
+enm_ash_hound:{name:"Ash Hound",hp:28,dmg:6,arm:2,spd:4.2,tel:.5,xp:16,r:.34,elite:false},
+enm_grief_knight:{name:"Grief Knight",hp:120,dmg:14,arm:20,spd:2,tel:1,xp:90,r:.55,elite:true},
+enm_crown_warden:{name:"Crown Warden",hp:360,dmg:21,arm:26,spd:2.2,tel:1.1,xp:200,r:.7,elite:true}};
+const SKILLS=[
+{id:"skl_ember_slash",name:"Ember Slash",cost:15,cd:4,power:1.2,range:3,desc:"Burning arc hits every foe ahead"},
+{id:"skl_cinder_step",name:"Cinder Step",cost:10,cd:3,power:1,range:5,desc:"Dash through ash; +30 stamina"},
+{id:"skl_ward_of_cinders",name:"Ward of Cinders",cost:25,cd:10,power:1.5,range:0,desc:"Warm light heals 15%×1.5 of max HP"}];
+
+/* ===== Dungeon generator (DungeonGenerator.cs, ported) ===== */
+function generateFloor(runSeed,floorIndex){
+const rng=RNG((runSeed*48611+floorIndex*953+17)>>>0);
+const rooms=[];const add=(kind)=>{const r={id:rooms.length,kind,conn:[],seed:rng.int(1e9),cleared:kind==="Entry"||kind==="Treasure"||kind==="Shrine",used:false};rooms.push(r);return r;};
+const link=(a,b)=>{rooms[a].conn.push(b);rooms[b].conn.push(a);};
+const entry=add("Entry");let prev=entry.id;const n=4+rng.int(5);
+for(let i=0;i<n;i++){const roll=rng.next();
+const kind=roll<.6?"Combat":roll<.75?"Treasure":roll<.9?"Shrine":"Elite";
+const r=add(kind);link(prev,r.id);prev=r.id;
+if(rng.next()<.3){const side=add(rng.next()<.6?"Treasure":"Shrine");link(r.id,side.id);}}
+const boss=add("BossGate");link(prev,boss.id);
+return{floorIndex,rooms,entry:entry.id,boss:boss.id};}
+
+/* ===== Game state ===== */
+const W=24,H=14; // metres
+let G=null;
+function newGame(seed){
+G={seed:seed>>>0,floorIndex:0,floor:null,roomId:0,level:1,xp:0,points:0,
+attrs:{str:10,dex:10,vig:10,foc:8,will:8,luck:5},
+ember:0,inventory:[],equip:{Weapon:null,Helm:null,Chest:null,Gloves:null,Boots:null,Ring:null,Amulet:null},
+quests:{qst_first_ember:{n:0,done:false},qst_grief_of_the_crown:{n:0,done:false}},
+kills:0,deaths:0,mark:null,nextItem:1,cooldowns:[0,0,0],log:[]};
+const blade=makeItem("wpn_ember_blade",0,[]);G.inventory.push(blade);G.equip.Weapon=blade.uid;
+G.ember=DS.maxEmber(G.attrs);G.floor=generateFloor(G.seed,0);enterRoom(G.floor.entry,true);
+addLog("You descend into the Hollow. Your ember is lit — keep it burning.");
+addLog("Quest: First Ember — fell three Hollow Husks.");}
+function makeItem(defId,rarity,affixes){return{uid:G.nextItem++,def:defId,rarity,affixes};}
+function weaponDef(it){return WEAPONS.find(w=>w.id===it.def);}
+function armourDef(it){return ARMOUR.find(a=>a.id===it.def);}
+function itemDef(it){return weaponDef(it)||armourDef(it);}
+function itemName(it){const d=itemDef(it);return d.name+" ("+RARITIES[it.rarity]+")";}
+function equippedWeapon(){const it=G.inventory.find(i=>i.uid===G.equip.Weapon);return it?weaponDef(it):WEAPONS[0];}
+function affixTotal(name){let t=0;for(const slot in G.equip){const it=G.inventory.find(i=>i.uid===G.equip[slot]);if(it)for(const a of it.affixes)if(a[0]===name)t+=a[1];}return t;}
+function playerArmour(){let t=0;for(const slot in G.equip){if(slot==="Weapon")continue;const it=G.inventory.find(i=>i.uid===G.equip[slot]);if(it)t+=armourDef(it).arm;}return Math.round(t+affixTotal("Armour"));}
+function maxHP(){return Math.round(DS.maxHealth(G.attrs,G.level)+affixTotal("Max HP"));}
+function weaponPower(){const w=equippedWeapon();const it=G.inventory.find(i=>i.uid===G.equip.Weapon);
+let p=DS.weaponPower(w.dmg,w.str,w.dex,G.attrs);if(it)for(const a of it.affixes)if(a[0]==="Damage %")p*=1+a[1];return p;}
+function critChance(){return Math.min(.5,DS.crit(G.attrs)+affixTotal("Crit %"));}
+
+/* ===== Player combat state (CombatState.cs, ported) ===== */
+let P=null,enemies=[],drops=[],doors=[],props=[],fx=[],moveTarget=null;
+function resetPlayer(x,y){const a=G.attrs;
+P={x,y,fx:0,fy:1,hp:maxHP(),st:DS.maxStamina(a),fo:DS.maxFocus(a),
+iframe:0,parry:0,windup:0,combo:0,comboT:0,regenDelay:0,blocking:false,atkCd:0,hurtT:0,dead:false};}
+function stMax(){return DS.maxStamina(G.attrs);}
+function foMax(){return DS.maxFocus(G.attrs);}
+function emMax(){return DS.maxEmber(G.attrs);}
+function emberLow(){return G.ember/emMax()<RULES.LowFrac;}
+
+function enterRoom(id,first){
+G.roomId=id;const room=G.floor.rooms[id];enemies=[];drops=[];props=[];fx=[];moveTarget=null;
+resetPlayer(W/2,H-2.5);
+doors=room.conn.map((cid,i)=>{const pos=room.conn.length===1?[[W-1,H/2]]:[[W-1,H/2],[1,H/2],[W/2,1]];
+const p=room.conn.length>=3?pos[i]:i===0?[W-1,H/2]:[1,H/2];return{to:cid,x:p[0],y:p[1]};});
+const rng=RNG(room.seed);
+if(!room.cleared){
+if(room.kind==="Combat"){const n=2+rng.int(3);for(let i=0;i<n;i++)spawnEnemy(rng.next()<.6?"enm_husk":"enm_ash_hound",rng);}
+else if(room.kind==="Elite")spawnEnemy("enm_grief_knight",rng);
+else if(room.kind==="BossGate")spawnEnemy("enm_crown_warden",rng);}
+if(room.kind==="Treasure"&&!room.used)props.push({kind:"chest",x:W/2,y:H/2});
+if(room.kind==="Shrine"&&!room.used)props.push({kind:"shrine",x:W/2,y:H/2});
+if(room.kind==="BossGate"&&room.cleared)props.push({kind:"descend",x:W/2,y:H/2});
+if(G.mark&&G.mark.floor===G.floorIndex&&G.mark.room===id)props.push({kind:"mark",x:G.mark.x,y:G.mark.y});
+addLog("Room: "+roomName(room)+(room.cleared?" (quiet)":" — foes stir!"));}
+function roomName(r){return{Entry:"The Entry",Combat:"Ashen Hall",Treasure:"Treasure Vault",Shrine:"Ember Shrine",Elite:"Knight's Vigil",BossGate:"The Boss Gate"}[r.kind];}
+function spawnEnemy(defId,rng){const d=ENEMIES[defId],s=depthScale(G.floorIndex);
+enemies.push({def:defId,name:d.name,hp:Math.round(d.hp*s),hpMax:Math.round(d.hp*s),dmg:d.dmg*s,arm:d.arm,spd:d.spd,tel:d.tel,xp:d.xp,r:d.r,elite:d.elite,
+x:3+rng.next()*(W-6),y:2+rng.next()*(H-6),state:"chase",t:0,stagger:0,dir:0});}
+
+/* ===== Log & HUD ===== */
+const logEl=document.getElementById("log");
+function addLog(msg){G.log.unshift(msg);if(G.log.length>40)G.log.pop();
+const li=document.createElement("li");li.textContent=msg;logEl.prepend(li);
+while(logEl.children.length>12)logEl.lastChild.remove();}
+function $(id){return document.getElementById(id);}
+function bar(b,t,v,max,label){$(b).style.width=(100*clamp(v/max,0,1))+"%";$(t).textContent=label+" "+Math.round(v)+" / "+Math.round(max);}
+function refreshHUD(){
+bar("bhp","thp",P.hp,maxHP(),"HP");bar("bst","tst",P.st,stMax(),"ST");bar("bfo","tfo",P.fo,foMax(),"FO");
+bar("bem","tem",G.ember,emMax(),emberLow()?"LOW!":"Ember");
+$("tlv").textContent=G.level;bar("bxp","txp",G.xp,xpToNext(G.level),"XP");
+const room=G.floor.rooms[G.roomId];
+$("roomInfo").textContent="Floor "+(G.floorIndex+1)+" · "+roomName(room)+" · Kills "+G.kills+" · Armour "+playerArmour()+" · Crit "+Math.round(critChance()*100)+"%"+(emberLow()?" · The dark hunts you: enemies +20% aggressive":"");}
+
+/* ===== Panels ===== */
+function renderPanels(){renderQuests();renderInventory();renderAttrs();}
+function renderQuests(){const p=$("paneQ");p.innerHTML="";
+const qs=[["qst_first_ember","First Ember","Fell three Hollow Husks.",3],["qst_grief_of_the_crown","Grief of the Crown","End the Grief Knight's watch.",1]];
+for(const[id,title,desc,need]of qs){const q=G.quests[id];const div=document.createElement("div");div.className="item";
+const locked=id==="qst_grief_of_the_crown"&&!G.quests.qst_first_ember.done;
+div.innerHTML="<span><b>"+title+"</b><br><small>"+(locked?"Locked — complete First Ember first.":desc)+"</small></span><span>"+(q.done?"✔ Done":locked?"—":Math.min(q.n,need)+" / "+need)+"</span>";p.appendChild(div);}}
+function renderInventory(){const p=$("paneI");p.innerHTML="";
+if(!G.inventory.length)p.textContent="Empty.";
+for(const it of G.inventory){const d=itemDef(it);const slot=weaponDef(it)?"Weapon":d.slot;
+const eq=G.equip[slot]===it.uid;const div=document.createElement("div");div.className="item";
+let info=d.name+" · "+slot+(weaponDef(it)?" · power "+weaponPowerPreview(it):" · armour "+d.arm);
+const aff=it.affixes.map(a=>"+"+(a[0].includes("%")?Math.round(a[1]*100)+"%":Math.round(a[1]))+" "+a[0]).join(", ");
+div.innerHTML='<span class="rar'+it.rarity+'"><b>'+RARITIES[it.rarity]+"</b> "+info+(aff?"<br><small>"+aff+"</small>":"")+"</span>";
+const b=document.createElement("button");b.textContent=eq?"Unequip":"Equip";
+b.setAttribute("aria-label",(eq?"Unequip ":"Equip ")+itemName(it));
+b.onclick=()=>{G.equip[slot]=eq?null:it.uid;P.hp=Math.min(P.hp,maxHP());addLog((eq?"Unequipped ":"Equipped ")+itemName(it)+".");renderPanels();refreshHUD();};
+div.appendChild(b);p.appendChild(div);}}
+function weaponPowerPreview(it){const w=weaponDef(it);return Math.round(DS.weaponPower(w.dmg,w.str,w.dex,G.attrs));}
+function renderAttrs(){const p=$("paneA");p.innerHTML="";
+const pts=document.createElement("p");pts.innerHTML="<b>Unspent points: "+G.points+"</b> (3 per level)";p.appendChild(pts);
+const names={str:"Strength",dex:"Dexterity",vig:"Vigor",foc:"Focus",will:"Will",luck:"Luck"};
+for(const k in names){const div=document.createElement("div");div.className="attr";
+div.innerHTML="<span>"+names[k]+"</span><span>"+G.attrs[k]+"</span>";
+const b=document.createElement("button");b.textContent="+";b.disabled=G.points<=0||G.attrs[k]>=99;
+b.setAttribute("aria-label","Spend one point on "+names[k]);
+b.onclick=()=>{if(G.points>0){G.points--;G.attrs[k]++;if(k==="vig")P.hp+=12;if(k==="foc")P.fo+=8;addLog(names[k]+" rises to "+G.attrs[k]+".");renderPanels();refreshHUD();}};
+div.appendChild(b);p.appendChild(div);}
+const d=document.createElement("p");d.className="help";d.textContent="HP "+maxHP()+" · Focus "+foMax()+" · Stamina "+stMax()+" (+"+DS.stamRegen(G.attrs).toFixed(1)+"/s) · Ember cap "+emMax();p.appendChild(d);}
+document.querySelectorAll('[role="tab"]').forEach(t=>t.onclick=()=>{
+document.querySelectorAll('[role="tab"]').forEach(x=>x.setAttribute("aria-selected",x===t?"true":"false"));
+["Q","I","A"].forEach(k=>$("pane"+k).hidden=("tab"+k)!==t.id);});
+
+/* ===== Combat actions ===== */
+const rngCombat=RNG(Date.now()&0xffffff);
+function variance(){return rngCombat.next()*.2-.1;}
+function tryLight(){if(P.dead||paused||P.windup>0||P.atkCd>0||P.st<RULES.LightCost)return;
+P.st-=RULES.LightCost;P.regenDelay=.6;P.combo=P.combo>=3?1:P.combo+1;P.comboT=RULES.ComboWindow;
+const w=equippedWeapon();P.atkCd=.45/w.speed;
+strike(w.reach,1.9,P.combo===3?1.5:1,"Light"+(P.combo===3?" finisher":""));fx.push({kind:"arc",x:P.x,y:P.y,dx:P.fx,dy:P.fy,r:w.reach,t:.15,c:"#ffd166"});}
+function tryHeavy(){if(P.dead||paused||P.windup>0||P.atkCd>0||P.st<RULES.HeavyCost)return;
+P.st-=RULES.HeavyCost;P.regenDelay=.8;P.windup=RULES.HeavyWindup;P.combo=0;P.comboT=0;
+addLog("Heavy windup…");}
+function heavyLand(){const w=equippedWeapon();P.atkCd=.7/w.speed;
+strike(w.reach+.3,2.6,2,"Heavy");fx.push({kind:"arc",x:P.x,y:P.y,dx:P.fx,dy:P.fy,r:w.reach+.3,t:.2,c:"#ff9b3d"});}
+function tryDodge(){if(P.dead||paused||P.iframe>0||P.st<RULES.DodgeCost)return;
+P.st-=RULES.DodgeCost;P.regenDelay=.4;P.iframe=RULES.IFrames;
+const dx=keys.left?-1:keys.right?1:P.fx,dy=keys.up?-1:keys.down?1:P.fy;const l=Math.hypot(dx,dy)||1;
+P.x=clamp(P.x+dx/l*2.4,.6,W-.6);P.y=clamp(P.y+dy/l*2.4,.6,H-.6);
+fx.push({kind:"dash",x:P.x,y:P.y,t:.2});}
+function strike(reach,cone,mult,label){let hits=0;
+for(const e of enemies){if(e.hp<=0)continue;const dx=e.x-P.x,dy=e.y-P.y,d=Math.hypot(dx,dy);
+if(d>reach+e.r)continue;const dot=(dx*P.fx+dy*P.fy)/(d||1);if(dot<Math.cos(cone/2))continue;
+const crit=rngCombat.next()<critChance();
+const dmg=resolveDamage(weaponPower(),mult,variance(),crit,e.arm,0);
+e.hp-=dmg;e.stagger=Math.max(e.stagger,.25);hits++;
+fx.push({kind:"hit",x:e.x,y:e.y,t:.25,txt:(crit?"CRIT ":"")+dmg,c:crit?"#ffd166":"#fff"});
+if(e.hp<=0)killEnemy(e);else if(crit)addLog(label+" crits "+e.name+" for "+dmg+".");}
+if(hits===0)addLog(label+" swing finds only ash.");}
+function killEnemy(e){G.kills++;gainXp(e.xp);G.ember=Math.min(emMax(),G.ember+RULES.KillEmber);
+addLog(e.name+" falls. +"+e.xp+" XP, +"+RULES.KillEmber+" ember.");
+if(e.def==="enm_husk"||e.def==="enm_grief_knight"){const qid=e.def==="enm_husk"?"qst_first_ember":"qst_grief_of_the_crown";
+const q=G.quests[qid];const need=qid==="qst_first_ember"?3:1;
+const unlocked=qid==="qst_first_ember"||G.quests.qst_first_ember.done;
+if(!q.done&&unlocked){q.n++;if(q.n>=need){q.done=true;gainXp(qid==="qst_first_ember"?60:200);
+G.ember=Math.min(emMax(),G.ember+(qid==="qst_first_ember"?20:50));
+addLog("Quest complete: "+(qid==="qst_first_ember"?"First Ember! +60 XP, +20 ember.":"Grief of the Crown! +200 XP, +50 ember, Hollow Amulet earned."));
+if(qid!=="qst_first_ember"){const it=makeItem("arm_hollow_amulet",2,[["Max HP",20]]);G.inventory.push(it);}}}}
+const dropChance=.35+G.attrs.luck*.003;
+if(rngCombat.next()<dropChance||e.elite){
+const defs=rngCombat.next()<.4?WEAPONS:ARMOUR;const d=defs[rngCombat.int(defs.length)];
+const rar=rollRarity(rngCombat,G.attrs.luck/99);const aff=[];
+const pool=AFFIXES.slice();for(let i=0;i<rar;i++){const j=rngCombat.int(pool.length);const a=pool.splice(j,1)[0];
+aff.push([a[0],a[1]+rngCombat.next()*(a[2]-a[1])]);}
+const it=makeItem(d.id,rar,aff);G.inventory.push(it);
+drops.push({x:e.x,y:e.y,item:it,t:0});addLog("Loot dropped: "+itemName(it)+" — walk over it.");}
+if(enemies.every(x=>x.hp<=0)){const room=G.floor.rooms[G.roomId];room.cleared=true;
+addLog("The room falls quiet. Exits are open.");
+if(room.kind==="BossGate"){props.push({kind:"descend",x:W/2,y:H/2});G.ember=Math.min(emMax(),G.ember+RULES.BossEmber);addLog("The Warden's crown shard shatters. +50 ember. A stairway descends.");}}
+renderPanels();}
+function gainXp(n){G.xp+=n;let gained=0;
+while(G.level<DS.MaxLevel&&G.xp>=xpToNext(G.level)){G.xp-=xpToNext(G.level);G.level++;G.points+=DS.PointsPerLevel;gained++;}
+if(G.level>=DS.MaxLevel)G.xp=0;
+if(gained>0){P.hp=maxHP();P.st=stMax();P.fo=foMax();addLog("LEVEL UP! You are level "+G.level+" (+"+3*gained+" attribute points). Fully restored.");}}
+function castSkill(i){if(P.dead||paused)return;const s=SKILLS[i];
+const cost=s.cost*(1-clamp(affixTotal("Focus cost -%"),0,.6));
+if(G.cooldowns[i]>0){addLog(s.name+" is not ready ("+G.cooldowns[i].toFixed(1)+"s).");return;}
+if(P.fo<cost){addLog("Not enough focus for "+s.name+".");return;}
+P.fo-=cost;G.cooldowns[i]=s.cd;
+if(i===0){let hits=0;for(const e of enemies){if(e.hp<=0)continue;const dx=e.x-P.x,dy=e.y-P.y,d=Math.hypot(dx,dy);
+if(d>s.range+e.r)continue;if((dx*P.fx+dy*P.fy)/(d||1)<Math.cos(1.2))continue;
+const dmg=resolveDamage(weaponPower()*s.power,1,variance(),rngCombat.next()<critChance(),e.arm,0);
+e.hp-=dmg;hits++;fx.push({kind:"hit",x:e.x,y:e.y,t:.3,txt:""+dmg,c:"#ffb454"});if(e.hp<=0)killEnemy(e);}
+fx.push({kind:"arc",x:P.x,y:P.y,dx:P.fx,dy:P.fy,r:s.range,t:.3,c:"#ff7b3d"});
+addLog("Ember Slash sears "+hits+" foe"+(hits===1?"":"s")+".");}
+else if(i===1){P.x=clamp(P.x+P.fx*4,.6,W-.6);P.y=clamp(P.y+P.fy*4,.6,H-.6);P.st=Math.min(stMax(),P.st+30);P.iframe=Math.max(P.iframe,.2);
+fx.push({kind:"dash",x:P.x,y:P.y,t:.3});addLog("Cinder Step: you dash through ash. +30 stamina.");}
+else{const heal=Math.round(maxHP()*.15*s.power);P.hp=Math.min(maxHP(),P.hp+heal);
+fx.push({kind:"heal",x:P.x,y:P.y,t:.5});addLog("Ward of Cinders knits your wounds: +"+heal+" HP.");}
+refreshHUD();}
+function interact(){if(P.dead||paused)return;
+for(const p of props){if(Math.hypot(p.x-P.x,p.y-P.y)>1.6)continue;const room=G.floor.rooms[G.roomId];
+if(p.kind==="chest"){room.used=true;props=props.filter(x=>x!==p);
+const defs=rngCombat.next()<.5?WEAPONS:ARMOUR;const d=defs[rngCombat.int(defs.length)];
+const rar=Math.max(2,rollRarity(rngCombat,G.attrs.luck/99));const aff=[];const pool=AFFIXES.slice();
+for(let i=0;i<rar;i++){const j=rngCombat.int(pool.length);const a=pool.splice(j,1)[0];aff.push([a[0],a[1]+rngCombat.next()*(a[2]-a[1])]);}
+const it=makeItem(d.id,rar,aff);G.inventory.push(it);addLog("Chest opens: "+itemName(it)+"!");renderPanels();return;}
+if(p.kind==="shrine"){room.used=true;props=props.filter(x=>x!==p);
+G.ember=Math.min(emMax(),G.ember+RULES.ShrineEmber);P.hp=Math.min(maxHP(),P.hp+Math.round(maxHP()*.3));
+addLog("The shrine kindles you: +25 ember, wounds eased.");return;}
+if(p.kind==="mark"){const rec=G.mark.amount;G.ember=Math.min(emMax(),G.ember+rec);G.mark=null;props=props.filter(x=>x!==p);
+addLog("You reclaim your fallen ember: +"+Math.round(rec)+".");return;}
+if(p.kind==="descend"){G.floorIndex++;G.floor=generateFloor(G.seed,G.floorIndex);enterRoom(G.floor.entry);
+addLog("You descend to floor "+(G.floorIndex+1)+". The dark grows thicker (foes +"+Math.round((depthScale(G.floorIndex)-1)*100)+"%).");return;}}
+for(const d of doors){if(Math.hypot(d.x-P.x,d.y-P.y)>1.7)continue;
+if(!G.floor.rooms[G.roomId].cleared){addLog("Foes bar the way — clear the room first.");return;}
+enterRoom(d.to);return;}
+addLog("Nothing to interact with here.");}
+
+/* ===== Damage to player ===== */
+function hitPlayer(e){
+if(P.iframe>0){addLog("You dodge "+e.name+"'s blow.");return;}
+if(P.parry>0){e.stagger=1.2;e.state="chase";addLog("PARRY! "+e.name+" is staggered.");fx.push({kind:"hit",x:e.x,y:e.y,t:.3,txt:"PARRY",c:"#7fc97f"});return;}
+let frac=P.blocking?.3:1;
+const dmg=resolveDamage(e.dmg,1,variance(),false,playerArmour(),0);
+const taken=Math.max(1,Math.round(dmg*frac));P.hp-=taken;P.hurtT=.25;
+addLog((P.blocking?"Blocked: ":"")+e.name+" hits you for "+taken+".");
+if(P.hp<=0)playerDie();}
+function playerDie(){P.dead=true;G.deaths++;
+const drop=G.ember*.5;G.mark={floor:G.floorIndex,room:G.roomId,x:P.x,y:P.y,amount:drop};G.ember-=drop;
+addLog("You fall. Half your ember ("+Math.round(drop)+") lies where you fell.");
+showOverlay("You fell","Your ember gutters… "+Math.round(drop)+" ember waits at your death-mark. Rise at the Entry.",[["Rise again",()=>{hideOverlay();enterRoom(G.floor.entry);}]]);}
+
+/* ===== Input ===== */
+const keys={up:false,down:false,left:false,right:false};
+let paused=false,helpOn=false;
+const cv=$("game"),ctx=cv.getContext("2d");
+const KEYMAP={KeyW:"up",ArrowUp:"up",KeyS:"down",ArrowDown:"down",KeyA:"left",ArrowLeft:"left",KeyD:"right",ArrowRight:"right"};
+window.addEventListener("keydown",e=>{
+if(e.target.tagName==="BUTTON"&&(e.code==="Space"||e.code==="Enter"))return;
+if(KEYMAP[e.code]!==undefined){keys[KEYMAP[e.code]]=true;e.preventDefault();return;}
+if(e.repeat)return;
+switch(e.code){
+case"KeyJ":case"KeyZ":tryLight();e.preventDefault();break;
+case"KeyK":case"KeyX":tryHeavy();e.preventDefault();break;
+case"Space":tryDodge();e.preventDefault();break;
+case"KeyL":case"KeyC":if(!P.blocking){P.blocking=true;P.parry=RULES.ParryWindow;}e.preventDefault();break;
+case"Digit1":castSkill(0);break;case"Digit2":castSkill(1);break;case"Digit3":castSkill(2);break;
+case"KeyE":interact();break;
+case"KeyP":case"Escape":togglePause();e.preventDefault();break;}});
+window.addEventListener("keyup",e=>{
+if(KEYMAP[e.code]!==undefined)keys[KEYMAP[e.code]]=false;
+if(e.code==="KeyL"||e.code==="KeyC")P.blocking=false;});
+cv.addEventListener("pointerdown",e=>{const r=cv.getBoundingClientRect();
+moveTarget={x:(e.clientX-r.left)/r.width*W,y:(e.clientY-r.top)/r.height*H};cv.focus();});
+cv.addEventListener("pointermove",e=>{if(e.buttons!==1)return;const r=cv.getBoundingClientRect();
+moveTarget={x:(e.clientX-r.left)/r.width*W,y:(e.clientY-r.top)/r.height*H};});
+cv.addEventListener("pointerup",()=>{moveTarget=null;});
+document.querySelectorAll("#touch button").forEach(b=>{
+const act=b.dataset.act;
+if(act==="block"){b.addEventListener("pointerdown",()=>{P.blocking=true;P.parry=RULES.ParryWindow;b.setAttribute("aria-pressed","true");});
+const off=()=>{P.blocking=false;b.setAttribute("aria-pressed","false");};
+b.addEventListener("pointerup",off);b.addEventListener("pointerleave",off);}
+else b.onclick=()=>({light:tryLight,heavy:tryHeavy,dodge:tryDodge,s1:()=>castSkill(0),s2:()=>castSkill(1),s3:()=>castSkill(2),interact})[act]();});
+document.addEventListener("visibilitychange",()=>{if(document.hidden&&!paused&&!P.dead)togglePause();});
+
+/* ===== Overlay / pause / save ===== */
+function showOverlay(title,text,buttons){$("ovTitle").textContent=title;$("ovText").textContent=text;
+const holder=$("ovButtons");holder.innerHTML="";
+for(const[label,fn]of buttons){const b=document.createElement("button");b.textContent=label;b.onclick=fn;holder.appendChild(b);}
+$("overlay").classList.add("on");holder.firstChild&&holder.firstChild.focus();}
+function hideOverlay(){$("overlay").classList.remove("on");cv.focus();}
+function togglePause(){if(P.dead)return;paused=!paused;
+if(paused)showOverlay("Paused","The Hollow holds its breath.",[["Resume (P)",togglePause],["Save",saveGame],["Load",loadGame]]);
+else hideOverlay();}
+$("btnPause").onclick=togglePause;
+$("btnHelp").onclick=()=>{paused=true;showOverlay("How to play",
+"Move: WASD/arrows (or drag on the arena). J light attack — chain 3 within 0.55s for a ×1.5 finisher. K heavy (×2, 0.8s windup). Space dodge (0.25s invulnerable). Hold L to block (70% reduced); tap it just before a blow lands to PARRY and stagger the foe. 1 Ember Slash, 2 Cinder Step, 3 Ward of Cinders. E interact: chests, shrines, doors, stairs, your death-mark. Ember drains 1/s — kills and shrines refill it; below 25% enemies grow bolder. Death drops half your ember where you fell; go get it back. Clear rooms to open exits; defeat the Crown Warden to descend.",
+[["Play",()=>{paused=false;hideOverlay();}]]);};
+function serialize(){return JSON.stringify({v:1,G,P:{hp:P.hp,st:P.st,fo:P.fo}});}
+let saveSlot=null;
+function saveGame(){saveSlot=serialize();try{localStorage.setItem("emberfall_save",saveSlot);}catch(e){}
+addLog("Saved (level "+G.level+", floor "+(G.floorIndex+1)+").");}
+function loadGame(){let raw=saveSlot;try{raw=raw||localStorage.getItem("emberfall_save");}catch(e){}
+if(!raw){addLog("No save found.");return;}
+const data=JSON.parse(raw);G=data.G;logEl.innerHTML="";
+for(const m of G.log.slice(0,12).reverse()){const li=document.createElement("li");li.textContent=m;logEl.prepend(li);}
+enterRoom(G.roomId);P.hp=data.P.hp;P.st=data.P.st;P.fo=data.P.fo;paused=false;hideOverlay();
+addLog("Loaded. Welcome back, emberbearer.");renderPanels();refreshHUD();}
+$("btnSave").onclick=saveGame;$("btnLoad").onclick=loadGame;
+
+/* ===== Simulation ===== */
+function tick(dt){
+if(paused||P.dead)return;
+// timers (CombatState.Tick)
+P.iframe=Math.max(0,P.iframe-dt);P.parry=Math.max(0,P.parry-dt);P.atkCd=Math.max(0,P.atkCd-dt);P.hurtT=Math.max(0,P.hurtT-dt);
+if(P.windup>0){P.windup-=dt;if(P.windup<=0)heavyLand();}
+if(P.comboT>0){P.comboT-=dt;if(P.comboT<=0)P.combo=0;}
+P.regenDelay=Math.max(0,P.regenDelay-dt);
+if(P.regenDelay<=0&&!P.blocking)P.st=Math.min(stMax(),P.st+DS.stamRegen(G.attrs)*dt);
+P.fo=Math.min(foMax(),P.fo+2*dt);
+for(let i=0;i<3;i++)G.cooldowns[i]=Math.max(0,G.cooldowns[i]-dt);
+G.ember=Math.max(0,G.ember-RULES.DrainPerSec*dt);
+// movement
+let mx=(keys.right?1:0)-(keys.left?1:0),my=(keys.down?1:0)-(keys.up?1:0);
+if(moveTarget){const dx=moveTarget.x-P.x,dy=moveTarget.y-P.y;if(Math.hypot(dx,dy)>.3){mx=dx;my=dy;}else moveTarget=null;}
+if(mx||my){const l=Math.hypot(mx,my);mx/=l;my/=l;
+const spd=5*(P.blocking?.45:1)*(P.windup>0?.3:1);
+P.x=clamp(P.x+mx*spd*dt,.6,W-.6);P.y=clamp(P.y+my*spd*dt,.6,H-.6);P.fx=mx;P.fy=my;}
+// enemies
+const aggro=emberLow()?RULES.LowAggro:1;
+for(const e of enemies){if(e.hp<=0)continue;
+if(e.stagger>0){e.stagger-=dt;continue;}
+const dx=P.x-e.x,dy=P.y-e.y,d=Math.hypot(dx,dy);
+if(e.state==="chase"){if(d>1.5){e.x+=dx/d*e.spd*aggro*dt;e.y+=dy/d*e.spd*aggro*dt;}
+else{e.state="telegraph";e.t=e.tel/aggro;}}
+else if(e.state==="telegraph"){e.t-=dt;if(e.t<=0){e.state="recover";e.t=.6;
+if(Math.hypot(P.x-e.x,P.y-e.y)<2)hitPlayer(e);}}
+else{e.t-=dt;if(e.t<=0)e.state="chase";}}
+// drops pickup
+for(const dr of drops.slice()){if(Math.hypot(dr.x-P.x,dr.y-P.y)<.9){
+drops=drops.filter(x=>x!==dr);addLog("Picked up "+itemName(dr.item)+".");renderPanels();}}
+for(const f of fx)f.t-=dt;fx=fx.filter(f=>f.t>0);}
+
+/* ===== Render ===== */
+const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function draw(){const sx=cv.width/W,sy=cv.height/H;
+ctx.fillStyle="#0e0e15";ctx.fillRect(0,0,cv.width,cv.height);
+// ember light radius: darkness closes in as ember fades
+const lightR=(4+8*(G.ember/emMax()))*sx;
+const grd=ctx.createRadialGradient(P.x*sx,P.y*sy,lightR*.35,P.x*sx,P.y*sy,lightR*1.6);
+grd.addColorStop(0,"rgba(38,32,26,0)");grd.addColorStop(1,"rgba(0,0,5,.88)");
+// floor grid
+ctx.strokeStyle="#1a1a26";ctx.lineWidth=1;
+for(let i=1;i<W;i+=2){ctx.beginPath();ctx.moveTo(i*sx,0);ctx.lineTo(i*sx,cv.height);ctx.stroke();}
+for(let i=1;i<H;i+=2){ctx.beginPath();ctx.moveTo(0,i*sy);ctx.lineTo(cv.width,i*sy);ctx.stroke();}
+// doors
+const room=G.floor.rooms[G.roomId];
+for(const d of doors){ctx.fillStyle=room.cleared?"#ffb454":"#555";
+ctx.fillRect(d.x*sx-8,d.y*sy-16,16,32);
+ctx.fillStyle="#e8e6df";ctx.font="12px system-ui";ctx.textAlign="center";
+ctx.fillText(roomName(G.floor.rooms[d.to]),d.x*sx,d.y*sy-22);
+if(Math.hypot(d.x-P.x,d.y-P.y)<1.7){ctx.fillText("[E] enter",d.x*sx,d.y*sy+30);}}
+// props
+for(const p of props){const x=p.x*sx,y=p.y*sy;
+ctx.textAlign="center";ctx.font="20px system-ui";
+const glyph={chest:"▣",shrine:"♦",mark:"✦",descend:"▼"}[p.kind];
+const col={chest:"#c99aff",shrine:"#ffb454",mark:"#7fc97f",descend:"#6fa8dc"}[p.kind];
+ctx.fillStyle=col;ctx.fillText(glyph,x,y+7);
+ctx.font="12px system-ui";ctx.fillStyle="#e8e6df";
+ctx.fillText({chest:"Chest",shrine:"Shrine",mark:"Your ember",descend:"Descend"}[p.kind],x,y-16);
+if(Math.hypot(p.x-P.x,p.y-P.y)<1.6)ctx.fillText("[E]",x,y+26);}
+// drops
+for(const dr of drops){ctx.fillStyle=["#cfcfcf","#8fd48f","#7fb2ff","#c99aff","#ffc46b"][dr.item.rarity];
+ctx.beginPath();ctx.arc(dr.x*sx,dr.y*sy,6,0,7);ctx.fill();}
+// enemies
+for(const e of enemies){if(e.hp<=0)continue;const x=e.x*sx,y=e.y*sy,r=e.r*sx;
+ctx.fillStyle=e.state==="telegraph"?(reduced?"#e05d5d":"#ff8080"):e.elite?"#8a5fb0":"#6b6b80";
+ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();
+if(e.state==="telegraph"){ctx.strokeStyle="#ffd166";ctx.lineWidth=3;
+ctx.beginPath();ctx.arc(x,y,r+5,0,7);ctx.stroke();}
+if(e.stagger>0){ctx.fillStyle="#7fc97f";ctx.font="11px system-ui";ctx.textAlign="center";ctx.fillText("staggered",x,y-r-14);}
+ctx.fillStyle="#000";ctx.fillRect(x-r,y-r-10,r*2,5);
+ctx.fillStyle="#e05d5d";ctx.fillRect(x-r,y-r-10,r*2*e.hp/e.hpMax,5);
+ctx.fillStyle="#e8e6df";ctx.font="11px system-ui";ctx.textAlign="center";ctx.fillText(e.name,x,y-r-14);}
+// player
+const px=P.x*sx,py=P.y*sy;
+ctx.fillStyle=P.iframe>0?"#9fd4ff":P.hurtT>0?"#ff9b9b":P.blocking?"#b9c9a9":"#ffd166";
+ctx.beginPath();ctx.arc(px,py,.38*sx,0,7);ctx.fill();
+ctx.strokeStyle="#fff";ctx.lineWidth=2;
+ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+P.fx*.6*sx,py+P.fy*.6*sy);ctx.stroke();
+if(P.windup>0){ctx.strokeStyle="#ff9b3d";ctx.lineWidth=4;
+ctx.beginPath();ctx.arc(px,py,.55*sx,-Math.PI/2,-Math.PI/2+7*(1-P.windup/RULES.HeavyWindup));ctx.stroke();}
+if(P.parry>0){ctx.strokeStyle="#7fc97f";ctx.lineWidth=3;ctx.beginPath();ctx.arc(px,py,.5*sx,0,7);ctx.stroke();}
+// fx
+for(const f of fx){const x=f.x*sx,y=f.y*sy;
+if(f.kind==="arc"){ctx.strokeStyle=f.c;ctx.lineWidth=5;const a=Math.atan2(f.dy,f.dx);
+ctx.beginPath();ctx.arc(x,y,f.r*sx,a-1,a+1);ctx.stroke();}
+else if(f.kind==="hit"){ctx.fillStyle=f.c;ctx.font="bold 16px system-ui";ctx.textAlign="center";
+ctx.fillText(f.txt,x,y-20-(reduced?0:(0.25-f.t)*40));}
+else if(f.kind==="dash"&&!reduced){ctx.strokeStyle="#9fd4ff";ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,14,0,7);ctx.stroke();}
+else if(f.kind==="heal"){ctx.strokeStyle="#7fc97f";ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,20,0,7);ctx.stroke();}}
+// darkness
+ctx.fillStyle=grd;ctx.fillRect(0,0,cv.width,cv.height);
+// combo & cooldown text
+ctx.fillStyle="#e8e6df";ctx.font="13px system-ui";ctx.textAlign="left";
+ctx.fillText("Combo "+P.combo+"/3"+(P.combo===2?" — next hit ×1.5!":""),10,cv.height-34);
+ctx.fillText(SKILLS.map((s,i)=>(i+1)+" "+s.name+(G.cooldowns[i]>0?" ("+G.cooldowns[i].toFixed(1)+"s)":" ✓")).join("   "),10,cv.height-12);}
+
+let last=performance.now();
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
+tick(dt);draw();refreshHUD();requestAnimationFrame(frame);}
+newGame(20261122);renderPanels();refreshHUD();
+showOverlay("Emberfall","The First Hearth is dead. You carry the last ember into the Hollow. Keep it lit: slay, kindle, descend. Press Play — full instructions under How to play.",[["Play",()=>{paused=false;hideOverlay();}]]);
+paused=true;
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
