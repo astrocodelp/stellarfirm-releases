@@ -33,3 +33,4 @@ Thumbs.db
 *.ulf
 config.vdf
 *.keystore
+tools/headless/bin/
